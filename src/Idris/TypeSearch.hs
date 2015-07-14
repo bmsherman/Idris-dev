@@ -17,7 +17,7 @@ import Data.Ord (comparing)
 import qualified Data.PriorityQueue.FingerTree as Q
 import Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text as T (pack, isPrefixOf)
+import qualified Data.Text as T (pack, isPrefixOf, isSuffixOf)
 import Data.Traversable (traverse)
 
 import Idris.AbsSyntax (addUsingConstraints, addImpl, getIState, putIState, implicit, logLvl)
@@ -36,6 +36,8 @@ import Idris.IBC
 import Prelude hiding (pred)
 
 import Util.Pretty (text, char, vsep, (<>), Doc, annotate)
+
+import Debug.Trace
 
 searchByType :: [String] -> PTerm -> Idris ()
 searchByType pkgs pterm = do
@@ -81,8 +83,10 @@ searchUsing pred istate ty = pred istate nty . concat . M.elems $
   special :: Name -> Bool
   special (NS n _) = special n
   special (SN _) = True
-  special (UN n) =    T.pack "default#" `T.isPrefixOf` n 
+  special (UN n) = not $ or [ T.pack x `T.isSuffixOf` n | x <- ["concat", "pack"]]
+  {-   T.pack "default#" `T.isPrefixOf` n 
                    || n `elem` map T.pack ["believe_me", "really_believe_me"]
+ -}
   special _ = False
 
 -- | Our default search predicate.
@@ -426,7 +430,7 @@ matchTypesBulk istate maxScore type1 types = getAllResults startQueueOfQueues wh
   unifyQueue :: State -> [(Type, Type)] -> Maybe State
   unifyQueue state [] = return state
   unifyQueue state ((ty1, ty2) : queue) = do
-    --trace ("go: \n" ++ show state) True `seq` return ()
+    trace ("go: \n" ++ show state) True `seq` return ()
     res <- tcToMaybe $ match_unify ctxt [ (n, Pi Nothing ty (TType (UVar 0))) | (n, ty) <- holes state] 
                                    (ty1, Nothing) 
                                    (ty2, Nothing) [] (map fst $ holes state) []
@@ -494,7 +498,7 @@ matchTypesBulk istate maxScore type1 types = getAllResults startQueueOfQueues wh
       parallel :: Sided a -> Sided [a] -> [Sided a]
       parallel (Sided l r) (Sided ls rs) = map (flip Sided r) ls ++ map (Sided l) rs
       instanceMods :: Classes -> [( Classes , AsymMods, [Name] )]
-      instanceMods classes = [ ( newClassArgs, mempty { typeClassApp = 1 }, newHoles )
+      instanceMods classes = [ trace ("class:\n" ++ show (newClassArgs, newHoles)) True `seq` ( newClassArgs, mempty { typeClassApp = 1 }, newHoles )
                       | (_, ty) <- classes
                       , inst <- possClassInstances usedns ty
                       , newClassArgs <- maybeToList $ typeclassUnify classInfo ctxt ty inst
